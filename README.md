@@ -16,9 +16,11 @@ Show your wireless Razer devices battery levels in your system tray.
 
 ## Usage
 
-### Downloading a Prebuilt Binary
+### Installation
 
-> _Todo_
+1. Download `razer-battery-report.exe` from [latest release](https://github.com/xzeldon/razer-battery-report/releases/latest)
+2. Run `razer-battery-report.exe`
+3. If you want a start menu shortcut you can make one yourself! Simply right-click `razer-battery-report.exe` and select "Pin to Start". This will automatically create a shortcut in %appdata%\Microsoft\Windows\Start Menu\Programs.
 
 ### Building from Source
 
@@ -44,7 +46,7 @@ To build, you must have [Rust](https://www.rust-lang.org/) and
   - [ ] Colored tray icons for different battery levels
   - [x] Show log window button in tray menu
   - [x] Further reduce CPU usage by using Event Loop Proxy events (more info [here](https://github.com/tauri-apps/tray-icon/issues/83#issuecomment-1697773065))
-- [ ] Prebuilt Binary
+- [x] Prebuilt Binary
 - [ ] Command Line Arguments for update frequency
 - [ ] Support for other Razer Devices (I only have DeathAdder V3 Pro, so I won't be able to test it with other devices)
 
