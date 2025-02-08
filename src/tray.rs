@@ -17,6 +17,9 @@ use tray_icon::{
 const BATTERY_UPDATE_INTERVAL: Duration = Duration::from_secs(300); // 5 min
 const DEVICE_FETCH_INTERVAL: Duration = Duration::from_secs(5);
 
+const BATTERY_CRITICAL_LEVEL: i32 = 5;
+const BATTERY_LOW_LEVEL: i32 = 15;
+
 #[derive(Debug)]
 pub struct MemoryDevice {
     pub name: String,
@@ -247,6 +250,27 @@ impl TrayApp {
         });
     }
 
+    fn get_battery_icon(battery_level: i32, is_charging: bool) -> tray_icon::Icon {
+        let icon = match (battery_level, is_charging) {
+            (lvl, _) if lvl <= BATTERY_CRITICAL_LEVEL && !is_charging => {
+                include_bytes!("../assets/mouse_red.png").to_vec()
+            }
+            (lvl, _) if lvl <= BATTERY_LOW_LEVEL && !is_charging => {
+                include_bytes!("../assets/mouse_yellow.png").to_vec()
+            }
+
+            _ => include_bytes!("../assets/mouse_white.png").to_vec(),
+        };
+
+        let image = image::load_from_memory(&icon)
+            .expect("Failed to open icon")
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+
+        tray_icon::Icon::from_rgba(rgba, width, height).expect("Failed to create icon")
+    }
+
     fn update(
         devices: &Arc<Mutex<HashMap<u32, MemoryDevice>>>,
         manager: &Arc<Mutex<DeviceManager>>,
@@ -272,6 +296,17 @@ impl TrayApp {
 
                     Self::check_notify(device, notify);
 
+                    if device.old_battery_level != battery_level
+                        || device.is_charging != is_charging
+                    {
+                        let new_icon = Self::get_battery_icon(battery_level, is_charging);
+                        if let Some(tray_icon) = tray_icon.lock().as_mut() {
+                            tray_icon
+                                .set_icon(Some(new_icon))
+                                .expect("Failed to update tray icon");
+                        }
+                    }
+
                     if let Some(tray_icon) = tray_icon.lock().as_mut() {
                         let _ = tray_icon
                             .set_tooltip(Some(format!("{}: {}%", device.name, battery_level)));
@@ -287,8 +322,9 @@ impl TrayApp {
         }
 
         if !device.is_charging
-            && (device.battery_level <= 5
-                || (device.old_battery_level > 15 && device.battery_level <= 15))
+            && (device.battery_level <= BATTERY_CRITICAL_LEVEL
+                || (device.old_battery_level > BATTERY_LOW_LEVEL
+                    && device.battery_level <= BATTERY_LOW_LEVEL))
         {
             info!("{}: Battery low ({}%)", device.name, device.battery_level);
             let _ = notify.battery_low(&device.name, device.battery_level);
