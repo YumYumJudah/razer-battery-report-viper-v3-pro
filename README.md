@@ -43,7 +43,7 @@ To build, you must have [Rust](https://www.rust-lang.org/) and
 
 - [x] Tray Applet
   - [ ] Force update devices button in tray menu
-  - [ ] Colored tray icons for different battery levels
+  - [x] Colored tray icons for different battery levels
   - [x] Show log window button in tray menu
   - [x] Further reduce CPU usage by using Event Loop Proxy events (more info [here](https://github.com/tauri-apps/tray-icon/issues/83#issuecomment-1697773065))
 - [x] Prebuilt Binary
