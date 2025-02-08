@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{console::DebugConsole, manager::DeviceManager};
+use crate::{console::DebugConsole, manager::DeviceManager, notify::Notify};
 use log::{error, info, trace};
 use parking_lot::Mutex;
 use tao::event_loop::{EventLoopBuilder, EventLoopProxy};
@@ -82,7 +82,7 @@ impl TrayInner {
     ) {
         let tray_builder = TrayIconBuilder::new()
             .with_menu(Box::new(tray_menu.clone()))
-            .with_tooltip("Service is running")
+            .with_tooltip("Search for devices")
             .with_icon(icon)
             .build();
 
@@ -97,6 +97,7 @@ pub struct TrayApp {
     device_manager: Arc<Mutex<DeviceManager>>,
     devices: Arc<Mutex<HashMap<u32, MemoryDevice>>>,
     tray_inner: TrayInner,
+    notify: Arc<Notify>,
 }
 
 #[derive(Debug)]
@@ -111,6 +112,7 @@ impl TrayApp {
             device_manager: Arc::new(Mutex::new(DeviceManager::new())),
             devices: Arc::new(Mutex::new(HashMap::new())),
             tray_inner: TrayInner::new(Arc::new(debug_console)),
+            notify: Arc::new(Notify::new()),
         }
     }
 
@@ -141,6 +143,7 @@ impl TrayApp {
     fn spawn_device_fetch_thread(&self, proxy: EventLoopProxy<TrayEvent>) {
         let devices = Arc::clone(&self.devices);
         let device_manager = Arc::clone(&self.device_manager);
+        let notify = Arc::clone(&self.notify);
 
         thread::spawn(move || {
             let mut last_devices = HashSet::new();
@@ -154,6 +157,7 @@ impl TrayApp {
                 for id in removed_devices {
                     if let Some(device) = devices.remove(&id) {
                         info!("Device removed: {}", device.name);
+                        let _ = notify.device_disconnecred(&device.name);
                     }
                 }
 
@@ -162,6 +166,7 @@ impl TrayApp {
                         if let Some(name) = device_manager.lock().get_device_name(id) {
                             devices.insert(id, MemoryDevice::new(name.clone(), id));
                             info!("New device: {}", name);
+                            let _ = notify.device_connected(&name);
                         } else {
                             error!("Failed to get device name for id: {}", id);
                         }
@@ -201,6 +206,7 @@ impl TrayApp {
         let tray_icon = Arc::clone(&self.tray_inner.tray_icon);
         let debug_console = Arc::clone(&self.tray_inner.debug_console);
         let menu_items = Arc::clone(&self.tray_inner.menu_items);
+        let notify = Arc::clone(&self.notify);
 
         let menu_channel = MenuEvent::receiver();
 
@@ -212,7 +218,7 @@ impl TrayApp {
                     TrayInner::build_tray(&tray_icon, &tray_menu, icon.clone());
                 }
                 tao::event::Event::UserEvent(TrayEvent::DeviceUpdate(device_ids)) => {
-                    Self::update(&devices, &device_manager, &device_ids, &tray_icon);
+                    Self::update(&devices, &device_manager, &device_ids, &tray_icon, &notify);
                 }
                 tao::event::Event::UserEvent(TrayEvent::MenuEvent(event)) => {
                     let menu_items = menu_items.lock();
@@ -246,6 +252,7 @@ impl TrayApp {
         manager: &Arc<Mutex<DeviceManager>>,
         device_ids: &[u32],
         tray_icon: &Arc<Mutex<Option<TrayIcon>>>,
+        notify: &Arc<Notify>,
     ) {
         let mut devices = devices.lock();
         let manager = manager.lock();
@@ -263,7 +270,7 @@ impl TrayApp {
                     device.battery_level = battery_level;
                     device.is_charging = is_charging;
 
-                    Self::check_notify(device);
+                    Self::check_notify(device, notify);
 
                     if let Some(tray_icon) = tray_icon.lock().as_mut() {
                         let _ = tray_icon
@@ -274,7 +281,7 @@ impl TrayApp {
         }
     }
 
-    fn check_notify(device: &MemoryDevice) {
+    fn check_notify(device: &MemoryDevice, notify: &Notify) {
         if device.battery_level == -1 {
             return;
         }
@@ -284,6 +291,7 @@ impl TrayApp {
                 || (device.old_battery_level > 15 && device.battery_level <= 15))
         {
             info!("{}: Battery low ({}%)", device.name, device.battery_level);
+            let _ = notify.battery_low(&device.name, device.battery_level);
         } else if device.old_battery_level <= 99
             && device.battery_level == 100
             && device.is_charging
@@ -292,6 +300,7 @@ impl TrayApp {
                 "{}: Battery fully charged ({}%)",
                 device.name, device.battery_level
             );
+            let _ = notify.battery_full(&device.name);
         }
     }
 }

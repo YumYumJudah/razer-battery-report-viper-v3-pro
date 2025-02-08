@@ -7,6 +7,7 @@ mod console;
 mod controller;
 mod devices;
 mod manager;
+mod notify;
 mod tray;
 
 fn main() {
