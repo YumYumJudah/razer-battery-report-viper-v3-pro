@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{console::DebugConsole, manager::DeviceManager, notify::Notify};
-use log::{error, info, trace};
+use log::{error, info, trace, warn};
 use parking_lot::Mutex;
 use tao::event_loop::{EventLoopBuilder, EventLoopProxy};
 use tray_icon::{
@@ -15,7 +15,7 @@ use tray_icon::{
     TrayIcon, TrayIconBuilder,
 };
 
-const BATTERY_UPDATE_INTERVAL: Duration = Duration::from_secs(300); // 5 min
+const BATTERY_UPDATE_INTERVAL: u64 = 300; // 5 min
 const DEVICE_FETCH_INTERVAL: Duration = Duration::from_secs(5);
 
 const BATTERY_CRITICAL_LEVEL: i32 = 5;
@@ -73,9 +73,9 @@ impl TrayInner {
             .map(|item| item as &dyn IsMenuItem)
             .collect();
 
-        tray_menu
-            .append_items(&item_refs)
-            .expect("Failed to append menu items");
+        if let Err(e) = tray_menu.append_items(&item_refs) {
+            warn!("Failed to append menu items: {}", e);
+        }
         tray_menu
     }
 
@@ -121,27 +121,34 @@ impl TrayApp {
     }
 
     pub fn run(&self) {
-        let icon = Self::create_icon();
+        let icon = match Self::create_icon() {
+            Ok(icon) => icon,
+            Err(e) => {
+                error!("{}", e);
+                return;
+            }
+        };
         let event_loop = EventLoopBuilder::with_user_event().build();
         let tray_menu = self.tray_inner.create_menu();
 
         let proxy = event_loop.create_proxy();
 
         self.spawn_device_fetch_thread(proxy.clone());
-        self.spawn_battery_check_thread(proxy.clone());
 
         self.run_event_loop(event_loop, icon, tray_menu, proxy);
     }
 
-    fn create_icon() -> tray_icon::Icon {
+    fn create_icon() -> Result<tray_icon::Icon, String> {
         let icon = include_bytes!("../assets/mouse_white.png");
-        let image = image::load_from_memory(icon)
-            .expect("Failed to open icon")
-            .into_rgba8();
+        let image = match image::load_from_memory(icon) {
+            Ok(image) => image.into_rgba8(),
+            Err(e) => return Err(format!("Failed to open icon: {}", e)),
+        };
         let (width, height) = image.dimensions();
         let rgba = image.into_raw();
 
-        tray_icon::Icon::from_rgba(rgba, width, height).expect("Failed to create icon")
+        tray_icon::Icon::from_rgba(rgba, width, height)
+            .map_err(|e| format!("Failed to create icon: {}", e))
     }
 
     fn spawn_device_fetch_thread(&self, proxy: EventLoopProxy<TrayEvent>) {
@@ -151,22 +158,23 @@ impl TrayApp {
 
         thread::spawn(move || {
             let mut last_devices = HashSet::new();
+            let mut battery_update_counter = 0;
             loop {
                 let (removed_devices, connected_devices) = {
                     let mut manager = device_manager.lock();
                     manager.fetch_devices()
                 };
 
-                let mut devices = devices.lock();
+                let mut devices_lock = devices.lock();
                 for id in removed_devices {
-                    if let Some(device) = devices.remove(&id) {
+                    if let Some(device) = devices_lock.remove(&id) {
                         info!("Device removed: {}", device.name);
                         let _ = notify.device_disconnecred(&device.name);
                     }
                 }
 
                 for &id in &connected_devices {
-                    if let std::collections::hash_map::Entry::Vacant(e) = devices.entry(id) {
+                    if let std::collections::hash_map::Entry::Vacant(e) = devices_lock.entry(id) {
                         if let Some(name) = device_manager.lock().get_device_name(id) {
                             e.insert(MemoryDevice::new(name.clone(), id));
                             info!("New device: {}", name);
@@ -183,18 +191,16 @@ impl TrayApp {
                     last_devices = current_devices;
                 }
 
+                if battery_update_counter == 0 {
+                    let device_ids: Vec<u32> = devices_lock.keys().cloned().collect();
+                    let _ = proxy.send_event(TrayEvent::DeviceUpdate(device_ids));
+                }
+
+                battery_update_counter = (battery_update_counter + 1)
+                    % (BATTERY_UPDATE_INTERVAL / DEVICE_FETCH_INTERVAL.as_secs());
+
                 thread::sleep(DEVICE_FETCH_INTERVAL);
             }
-        });
-    }
-
-    fn spawn_battery_check_thread(&self, proxy: EventLoopProxy<TrayEvent>) {
-        let devices = Arc::clone(&self.devices);
-
-        thread::spawn(move || loop {
-            let device_ids: Vec<u32> = devices.lock().keys().cloned().collect();
-            let _ = proxy.send_event(TrayEvent::DeviceUpdate(device_ids));
-            thread::sleep(BATTERY_UPDATE_INTERVAL);
         });
     }
 
@@ -251,7 +257,7 @@ impl TrayApp {
         });
     }
 
-    fn get_battery_icon(battery_level: i32, is_charging: bool) -> tray_icon::Icon {
+    fn get_battery_icon(battery_level: i32, is_charging: bool) -> Result<tray_icon::Icon, String> {
         let icon = match (battery_level, is_charging) {
             (lvl, _) if lvl <= BATTERY_CRITICAL_LEVEL && !is_charging => {
                 include_bytes!("../assets/mouse_red.png").to_vec()
@@ -263,13 +269,15 @@ impl TrayApp {
             _ => include_bytes!("../assets/mouse_white.png").to_vec(),
         };
 
-        let image = image::load_from_memory(&icon)
-            .expect("Failed to open icon")
-            .into_rgba8();
+        let image = match image::load_from_memory(&icon) {
+            Ok(image) => image.into_rgba8(),
+            Err(e) => return Err(format!("Failed to open icon: {}", e)),
+        };
         let (width, height) = image.dimensions();
         let rgba = image.into_raw();
 
-        tray_icon::Icon::from_rgba(rgba, width, height).expect("Failed to create icon")
+        tray_icon::Icon::from_rgba(rgba, width, height)
+            .map_err(|e| format!("Failed to create icon: {}", e))
     }
 
     fn update(
@@ -300,11 +308,12 @@ impl TrayApp {
                     if device.old_battery_level != battery_level
                         || device.is_charging != is_charging
                     {
-                        let new_icon = Self::get_battery_icon(battery_level, is_charging);
-                        if let Some(tray_icon) = tray_icon.lock().as_mut() {
-                            tray_icon
-                                .set_icon(Some(new_icon))
-                                .expect("Failed to update tray icon");
+                        if let Ok(new_icon) = Self::get_battery_icon(battery_level, is_charging) {
+                            if let Some(tray_icon) = tray_icon.lock().as_mut() {
+                                if let Err(e) = tray_icon.set_icon(Some(new_icon)) {
+                                    warn!("Failed to update tray icon: {}", e);
+                                }
+                            }
                         }
                     }
 
