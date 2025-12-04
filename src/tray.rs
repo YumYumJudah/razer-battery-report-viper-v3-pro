@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    rc::Rc,
     sync::Arc,
     thread,
     time::Duration,
@@ -43,16 +44,16 @@ impl MemoryDevice {
 }
 
 pub struct TrayInner {
-    tray_icon: Arc<Mutex<Option<TrayIcon>>>,
-    menu_items: Arc<Mutex<Vec<MenuItem>>>,
-    debug_console: Arc<DebugConsole>,
+    tray_icon: Rc<Mutex<Option<TrayIcon>>>,
+    menu_items: Rc<Mutex<Vec<MenuItem>>>,
+    debug_console: Rc<DebugConsole>,
 }
 
 impl TrayInner {
-    fn new(debug_console: Arc<DebugConsole>) -> Self {
+    fn new(debug_console: Rc<DebugConsole>) -> Self {
         Self {
-            tray_icon: Arc::new(Mutex::new(None)),
-            menu_items: Arc::new(Mutex::new(Vec::new())),
+            tray_icon: Rc::new(Mutex::new(None)),
+            menu_items: Rc::new(Mutex::new(Vec::new())),
             debug_console,
         }
     }
@@ -79,7 +80,7 @@ impl TrayInner {
     }
 
     fn build_tray(
-        tray_icon: &Arc<Mutex<Option<TrayIcon>>>,
+        tray_icon: &Rc<Mutex<Option<TrayIcon>>>,
         tray_menu: &Menu,
         icon: tray_icon::Icon,
     ) {
@@ -114,7 +115,7 @@ impl TrayApp {
         Self {
             device_manager: Arc::new(Mutex::new(DeviceManager::new())),
             devices: Arc::new(Mutex::new(HashMap::new())),
-            tray_inner: TrayInner::new(Arc::new(debug_console)),
+            tray_inner: TrayInner::new(Rc::new(debug_console)),
             notify: Arc::new(Notify::new()),
         }
     }
@@ -165,9 +166,9 @@ impl TrayApp {
                 }
 
                 for &id in &connected_devices {
-                    if !devices.contains_key(&id) {
+                    if let std::collections::hash_map::Entry::Vacant(e) = devices.entry(id) {
                         if let Some(name) = device_manager.lock().get_device_name(id) {
-                            devices.insert(id, MemoryDevice::new(name.clone(), id));
+                            e.insert(MemoryDevice::new(name.clone(), id));
                             info!("New device: {}", name);
                             let _ = notify.device_connected(&name);
                         } else {
@@ -206,9 +207,9 @@ impl TrayApp {
     ) {
         let devices = Arc::clone(&self.devices);
         let device_manager = Arc::clone(&self.device_manager);
-        let tray_icon = Arc::clone(&self.tray_inner.tray_icon);
-        let debug_console = Arc::clone(&self.tray_inner.debug_console);
-        let menu_items = Arc::clone(&self.tray_inner.menu_items);
+        let tray_icon = Rc::clone(&self.tray_inner.tray_icon);
+        let debug_console = Rc::clone(&self.tray_inner.debug_console);
+        let menu_items = Rc::clone(&self.tray_inner.menu_items);
         let notify = Arc::clone(&self.notify);
 
         let menu_channel = MenuEvent::receiver();
@@ -275,7 +276,7 @@ impl TrayApp {
         devices: &Arc<Mutex<HashMap<u32, MemoryDevice>>>,
         manager: &Arc<Mutex<DeviceManager>>,
         device_ids: &[u32],
-        tray_icon: &Arc<Mutex<Option<TrayIcon>>>,
+        tray_icon: &Rc<Mutex<Option<TrayIcon>>>,
         notify: &Arc<Notify>,
     ) {
         let mut devices = devices.lock();
