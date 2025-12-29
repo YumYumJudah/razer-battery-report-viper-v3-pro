@@ -10,17 +10,44 @@
 
 Show your wireless Razer devices battery levels in your system tray.
 
-> This is a work in progress and currently support only **Razer DeathAdder V3 Pro** and **Razer DeathAdder V3 HyperSpeed**.
-
 > Currently, this works only on **Windows**.
+
+## Supported devices
+- Razer DeathAdder V3 Pro
+- Razer DeathAdder V3 HyperSpeed
+- Razer DeathAdder V2 Pro
+
+> **Note:** If your device is not listed, you can add support for it yourself! Please see the [Adding new devices yourself](#adding-new-devices-yourself) section below. Contributions and Pull Requests are welcome!
 
 ## Usage
 
 ### Installation
 
-1. Download `razer-battery-report.exe` from [latest release](https://github.com/xzeldon/razer-battery-report/releases/latest)
-2. Run `razer-battery-report.exe`
-3. If you want a start menu shortcut you can make one yourself! Simply right-click `razer-battery-report.exe` and select "Pin to Start". This will automatically create a shortcut in %appdata%\Microsoft\Windows\Start Menu\Programs.
+> **Note:** Since this project is currently in active development, there is no installer (`.msi` or setup `.exe`) yet. To set up the application permanently (Start Menu icon, Autostart), please follow the manual steps below.
+
+1. **Download** the latest `razer-battery-report.exe` from [Releases](https://github.com/xzeldon/razer-battery-report/releases/latest).
+
+2. **Move the executable** to a safe permanent location.
+   * *Recommended:* Create a folder at `C:\Program Files\Razer Battery Report\` and move the `.exe` there.
+   * *Note:* This prevents accidental deletion from your Downloads folder.
+
+3. **Add to Startup** (Recommended):
+   * Right-click `razer-battery-report.exe` -> **Create shortcut**.
+   * Press `Win + R`, type `shell:startup` and press Enter.
+   * Move the created shortcut into the opened folder.
+   * *Now the app will start automatically when you log in.*
+
+4. **Add to Start Menu** (Optional):
+   * Create another shortcut.
+   * Press `Win + R`, type `shell:programs` and press Enter.
+   * Move the shortcut into the opened folder.
+   * *Now you can search for "Razer Battery Report" in Windows Search.*
+
+> **Tips:**
+> - You can rename the shortcuts to simply **"Razer Battery Report"** (remove ".exe" and "Shortcut").
+> - **Custom Icon:**
+>   1. Download [`mouse.ico`](https://github.com/xzeldon/razer-battery-report/raw/master/assets/mouse.ico) (save it in the same folder as the `.exe`).
+>   2. Right-click the shortcut -> **Properties** -> **Change Icon...** -> **Browse** -> Select the downloaded `.ico` file.
 
 ### Building from Source
 
