@@ -49,9 +49,16 @@ pub const RAZER_DEATHADDER_V3_HYPERSPEED_WIRED: DeviceInfo =
 pub const RAZER_DEATHADDER_V3_HYPERSPEED_WIRELESS: DeviceInfo =
     DeviceInfo::new("Razer DeathAdder V3 HyperSpeed (Wireless)", 0x00C5, 0, 1, 2);
 
-pub const RAZER_DEVICE_LIST: [DeviceInfo; 4] = [
+pub const RAZER_DEATHADDER_V2_PRO_WIRED: DeviceInfo =
+    DeviceInfo::new("Razer DeathAdder V2 Pro (Wired)", 0x007C, 0, 1, 2);
+pub const RAZER_DEATHADDER_V2_PRO_WIRELESS: DeviceInfo =
+    DeviceInfo::new("Razer DeathAdder V2 Pro (Wireless)", 0x007D, 0, 1, 2);
+
+pub const RAZER_DEVICE_LIST: [DeviceInfo; 6] = [
     RAZER_DEATHADDER_V3_PRO_WIRED,
     RAZER_DEATHADDER_V3_PRO_WIRELESS,
     RAZER_DEATHADDER_V3_HYPERSPEED_WIRED,
     RAZER_DEATHADDER_V3_HYPERSPEED_WIRELESS,
+    RAZER_DEATHADDER_V2_PRO_WIRED,
+    RAZER_DEATHADDER_V2_PRO_WIRELESS,
 ];
